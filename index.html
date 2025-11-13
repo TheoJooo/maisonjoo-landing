@@ -8,6 +8,14 @@
   <meta name="robots" content="index,follow" />
   <link rel="icon" type="image/png" href="/favicon.png" />
 
+  <link rel="preconnect" href="https://esm.sh" crossorigin>
+  <link rel="dns-prefetch" href="//esm.sh">
+  <link rel="modulepreload" href="https://esm.sh/ogl@0.0.104">
+
+  <link rel="preload" href="/fonts/MinionPro-Regular.otf" as="font" type="font/otf" crossorigin>
+  <link rel="preload" href="/fonts/MinionPro-Bold.otf" as="font" type="font/otf" crossorigin>
+  <link rel="preload" href="/fonts/MinionPro-It.otf" as="font" type="font/otf" crossorigin>
+
   <style>
     @font-face { font-family:"Minion Pro"; src:local("Minion Pro Regular"), local("MinionPro-Regular"), url("fonts/MinionPro-Regular.otf") format("opentype"); font-weight:400; font-style:normal; font-display: swap; }
     @font-face { font-family:"Minion Pro"; src:local("Minion Pro Bold"), local("MinionPro-Bold"), url("fonts/MinionPro-Bold.otf") format("opentype"); font-weight:700; font-style:normal; font-display: swap; }
@@ -16,15 +24,37 @@
     :root { --bg:#FDFAFA; --fg:#292929; }
 
     html, body {
-      height:100%; margin:0; padding:0; overflow:hidden;
-      background:var(--bg); color:var(--fg);
-      font-family:"Minion Pro", serif; letter-spacing:.01em;
+      height:100%; 
+      margin:0; 
+      padding:0; 
+      overflow:hidden;
+      background:var(--bg); 
+      color:var(--fg);
+      font-family:"Minion Pro", serif; 
+      letter-spacing:.01em;
+      user-select: none;       /* ✅ empêche la sélection du texte */
+      -webkit-user-select: none; /* pour Safari */
+      -moz-user-select: none;    /* pour Firefox */
+      -ms-user-select: none;     /* pour les vieux navigateurs */
     }
 
     /* === BACKGROUND PLASMA (derrière, fixe) === */
-    #plasma-bg {
+    #plasma-bg, .wrap, .footer { opacity: 0; }
+
+    #plasma-bg { 
       position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      transition: opacity .6s ease;            /* plasma fade-in */
     }
+
+    .wrap, .footer {
+      position: relative; z-index: 1;
+      transition: opacity .5s ease, transform .5s ease;
+      transform: translateY(6px);               /* léger slide-up */
+    }
+
+    html.plasma-ready #plasma-bg { opacity: 1; }
+    html.plasma-ready .wrap,
+    html.plasma-ready .footer { opacity: 1; transform: none; }
 
     /* === CONTENU === */
     .wrap {
@@ -81,12 +111,16 @@
     import { Renderer, Program, Mesh, Triangle } from "https://esm.sh/ogl@0.0.104";
 
     // Réglages ambiance
+    const isMobile = window.innerWidth < 768;
+    const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const DPR = isMobile ? 1 : Math.min(window.devicePixelRatio || 1, 1.5);
+
     const COLOR_HEX = "#373737";
-    const SPEED = 0.6;
-    const SCALE = 1.25;
-    const OPACITY = 0.12; 
-    const MODE = "pingpong";
-    const MOUSE = true;
+    const OPACITY   = isMobile ? 0.10 : 0.12;
+    const SPEED     = isMobile ? 0.5  : 0.6;
+    const SCALE     = 1.25;
+    const MODE      = "pingpong";
+    const MOUSE     = true;
 
     const hexToRgb = (hex) => {
       const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -128,7 +162,12 @@
     }`;
 
     const container = document.getElementById("plasma-bg");
-    const renderer = new Renderer({ webgl:2, alpha:true, antialias:false, dpr:Math.min(devicePixelRatio||1,2) });
+    const renderer = new Renderer({
+      webgl: 2,
+      alpha: true,
+      antialias: false,
+      dpr: DPR
+    });
     const gl = renderer.gl; const canvas = gl.canvas;
     canvas.style.cssText = "width:100%;height:100%;display:block;";
     container.appendChild(canvas);
@@ -167,17 +206,48 @@
       });
     }
 
+    let running = true;
+    document.addEventListener('visibilitychange', () => {
+      running = !document.hidden;
+      if (running && !reduceMotion) requestAnimationFrame(loop);
+    });
+
+    let firstFrame = true;
+    let last = 0;
+    const targetDelta = 1000 / 30; // 30 fps
     const t0 = performance.now();
-    const loop = (t)=>{
-      const D=10.; let time=(t-t0)*0.001;
+
+    const loop = (t) => {
+      if (!running) return;
+      if (t - last < targetDelta) { requestAnimationFrame(loop); return; }
+      last = t;
+
       // pingpong doux
-      const seg=time%D; const forward=(Math.floor(time/D)%2===0);
-      const u=seg/D; const smooth=u*u*(3-2*u); const tt=forward? smooth*D : (1-smooth)*D;
+      const D = 10;
+      const time = (t - t0) * 0.001;
+      const seg = time % D;
+      const forward = (Math.floor(time / D) % 2 === 0);
+      const u = seg / D;
+      const smooth = u * u * (3 - 2 * u);
+      const tt = forward ? smooth * D : (1 - smooth) * D;
       program.uniforms.iTime.value = tt;
+
       renderer.render({ scene: mesh });
+
+      if (firstFrame) {
+        document.documentElement.classList.add('plasma-ready');
+        firstFrame = false;
+      }
       requestAnimationFrame(loop);
     };
-    requestAnimationFrame(loop);
+
+    // ==== DÉMARRAGE ====
+    if (reduceMotion) {
+      renderer.render({ scene: mesh });               // 1 frame seulement
+      document.documentElement.classList.add('plasma-ready');
+    } else {
+      requestAnimationFrame(loop);
+    }
   </script>
 </body>
 </html>
