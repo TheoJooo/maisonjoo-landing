@@ -115,10 +115,13 @@
     const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
     const DPR = isMobile ? 1 : Math.min(window.devicePixelRatio || 1, 1.5);
 
-    const COLOR_HEX = "#373737";
-    const OPACITY   = isMobile ? 0.10 : 0.12;
+    // un peu plus sombre + plus visible sur mobile
+    const COLOR_HEX = isMobile ? "#303030" : "#373737";
+    // beaucoup plus présent sur mobile, inchangé sur desktop
+    const OPACITY   = isMobile ? 0.20 : 0.12;
+    // un peu plus “large” sur desktop, plus resserré sur mobile
     const SPEED     = isMobile ? 0.5  : 0.6;
-    const SCALE     = 1.25;
+    const SCALE     = isMobile ? 1.1  : 1.25;
     const MODE      = "pingpong";
     const MOUSE     = true;
 
