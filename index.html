@@ -57,12 +57,17 @@
     html.plasma-ready .footer { opacity: 1; transform: none; }
 
     /* === CONTENU === */
+    :root {
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
     .wrap {
       position: relative; z-index: 1;
       height: 100%;
       display: flex; flex-direction: column;
       justify-content: center; align-items: center;
       text-align: center; padding: 2rem; box-sizing: border-box; line-height: 1.25;
+      padding-bottom: calc(var(--safe-bottom) + 7rem); /* keeps footer CTA visible in in-app browsers */
     }
 
     .title  { font-size: clamp(58px, 10vw, 120px);; font-weight:700;}
@@ -74,7 +79,7 @@
     .soon   {font-size: clamp(15px, 2.6vw, 20px); margin-top: 4em; }
 
     .footer {
-      position: fixed; left:0; right:0; bottom: 2.5rem;
+      position: fixed; left:0; right:0; bottom: calc(var(--safe-bottom) + 1.5rem);
       z-index: 1; text-align:center; font-size:15px; letter-spacing:.08em;
     }
     .contact { font-size: clamp(15px, 2.6vw, 20px); text-transform: uppercase; margin-bottom:.4em; letter-spacing:0.12em;}
