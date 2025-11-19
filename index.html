@@ -78,6 +78,25 @@
     .desc   { font-size: clamp(15px, 2.5vw, 18px); font-weight:700; text-transform: uppercase; letter-spacing:.05em; margin-top:.1em; }
     .soon   {font-size: clamp(15px, 2.6vw, 20px); margin-top: 4em; }
 
+    .pdf-btn {
+      margin-top: 1.5rem;
+      padding: 0.95rem 2.75rem;
+      font-size: clamp(8px, 2vw, 9px);
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      background: transparent;
+      border: 1px solid currentColor;
+      border-radius: 0px;
+      cursor: pointer;
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+    .pdf-btn:hover,
+    .pdf-btn:focus-visible {
+      background: var(--fg);
+      color: var(--bg);
+      outline: none;
+    }
+
     .footer {
       position: fixed; left:0; right:0; bottom: calc(var(--safe-bottom) + 1.5rem);
       z-index: 1; text-align:center; font-size:15px; letter-spacing:.08em;
@@ -91,6 +110,81 @@
       text-underline-offset: 3px;
       text-decoration-thickness: 0.5px;
     }
+
+    .pdf-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: none;
+      padding: clamp(2rem, 6vh, 4rem) 1.5rem 1.5rem;
+      box-sizing: border-box;
+    }
+    .pdf-modal.is-visible {
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+    }
+    .pdf-modal__backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.35);
+      backdrop-filter: blur(6px);
+    }
+    .pdf-modal__panel {
+      position: relative;
+      margin: 0 auto;
+      width: min(900px, 94vw);
+      height: min(90vh, 900px);
+      background: var(--bg);
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 18px;
+      box-shadow: 0 35px 70px rgba(0,0,0,0.25);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .pdf-modal__header {
+      padding: 1rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 1rem;
+    }
+    .pdf-modal__close {
+      border: none;
+      background: transparent;
+      font-size: 1.5rem;
+      cursor: pointer;
+      line-height: 1;
+    }
+    .pdf-modal__body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 0 1.5rem 1.5rem;
+    }
+    .pdf-modal__body iframe {
+      flex: 1;
+      width: 100%;
+      border: none;
+      background: rgba(0,0,0,0.03);
+      border-radius: 8px;
+    }
+    .pdf-modal__hint {
+      font-size: 0.85rem;
+      margin-top: 0.75rem;
+      opacity: 0.75;
+    }
+    @media (max-width: 640px) {
+      .pdf-modal__panel {
+        width: 95vw;
+        height: 85vh;
+        border-radius: 14px;
+      }
+      .pdf-modal__body {
+        padding: 0 1rem 1rem;
+      }
+    }
   </style>
 </head>
 <body>
@@ -103,12 +197,37 @@
     <div class="kicker">seoul & paris</div>
     <div class="desc">botanical set design studio</div>
     <div class="soon">more coming soon</div>
+    <button class="pdf-btn" type="button" id="openPdf" data-pdf="./maison-joo-portfolio.pdf">
+      view dossier
+    </button>
   </main>
 
   <!-- Footer fixé en bas -->
   <div class="footer">
     <div class="contact"><a href="mailto:contact@maisonjoo.com">contact</a></div>
     <div class="year">2025</div>
+  </div>
+
+  <div class="pdf-modal" id="pdfModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="pdfModalTitle">
+    <div class="pdf-modal__backdrop" data-modal-close></div>
+    <div class="pdf-modal__panel" tabindex="-1">
+      <header class="pdf-modal__header">
+        <div class="pdf-modal__title" id="pdfModalTitle">maison joo file</div>
+        <button class="pdf-modal__close" type="button" aria-label="Close dossier" data-modal-close>&times;</button>
+      </header>
+      <div class="pdf-modal__body">
+        <iframe
+          id="pdfFrame"
+          title="Maison Joo dossier PDF"
+          loading="lazy"
+          src=""
+          allow="fullscreen"
+        ></iframe>
+        <p class="pdf-modal__hint">
+          The PDF loads above. If nothing appears, <a href="./maison-joo-portfolio.pdf" target="_blank" rel="noopener">open it in a new tab</a>.
+        </p>
+      </div>
+    </div>
   </div>
 
   <!-- Plasma vanilla avec OGL (ESM CDN) -->
@@ -256,6 +375,53 @@
     } else {
       requestAnimationFrame(loop);
     }
+
+    // ==== PDF MODAL ====
+    const pdfBtn = document.getElementById('openPdf');
+    const pdfModal = document.getElementById('pdfModal');
+    const pdfFrame = document.getElementById('pdfFrame');
+    const modalPanel = pdfModal?.querySelector('.pdf-modal__panel');
+    const closeControls = pdfModal?.querySelectorAll('[data-modal-close]') || [];
+    let lastActiveElement = null;
+
+    const setModalVisibility = (show) => {
+      if (!pdfModal) return;
+      pdfModal.classList.toggle('is-visible', show);
+      pdfModal.setAttribute('aria-hidden', String(!show));
+      if (show) {
+        modalPanel?.focus({ preventScroll: true });
+      } else if (lastActiveElement) {
+        lastActiveElement.focus({ preventScroll: true });
+        lastActiveElement = null;
+      }
+    };
+
+    const ensurePdfLoaded = () => {
+      if (!pdfFrame || pdfFrame.dataset.loaded === 'true') return;
+      const pdfSrc = pdfBtn?.dataset.pdf;
+      if (pdfSrc) {
+        pdfFrame.src = `${pdfSrc}#view=FitH&pagemode=none`;
+        pdfFrame.dataset.loaded = 'true';
+      }
+    };
+
+    const openModal = () => {
+      lastActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      ensurePdfLoaded();
+      setModalVisibility(true);
+    };
+
+    const closeModal = () => {
+      setModalVisibility(false);
+    };
+
+    pdfBtn?.addEventListener('click', openModal);
+    closeControls.forEach((node) => node.addEventListener('click', closeModal));
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && pdfModal?.classList.contains('is-visible')) {
+        closeModal();
+      }
+    });
   </script>
 </body>
 </html>
