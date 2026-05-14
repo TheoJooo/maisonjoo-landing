@@ -12,15 +12,7 @@
   <link rel="dns-prefetch" href="//esm.sh">
   <link rel="modulepreload" href="https://esm.sh/ogl@0.0.104">
 
-  <link rel="preload" href="/fonts/MinionPro-Regular.otf" as="font" type="font/otf" crossorigin>
-  <link rel="preload" href="/fonts/MinionPro-Bold.otf" as="font" type="font/otf" crossorigin>
-  <link rel="preload" href="/fonts/MinionPro-It.otf" as="font" type="font/otf" crossorigin>
-
   <style>
-    @font-face { font-family:"Minion Pro"; src:local("Minion Pro Regular"), local("MinionPro-Regular"), url("fonts/MinionPro-Regular.otf") format("opentype"); font-weight:400; font-style:normal; font-display: swap; }
-    @font-face { font-family:"Minion Pro"; src:local("Minion Pro Bold"), local("MinionPro-Bold"), url("fonts/MinionPro-Bold.otf") format("opentype"); font-weight:700; font-style:normal; font-display: swap; }
-    @font-face { font-family:"Minion Pro"; src:local("Minion Pro Italic"), local("MinionPro-It"), url("fonts/MinionPro-It.otf") format("opentype"); font-weight:400; font-style:italic; font-display: swap; }
-
     :root { --bg:#FDFAFA; --fg:#292929; }
 
     html, body {
@@ -30,7 +22,7 @@
       overflow:hidden;
       background:var(--bg); 
       color:var(--fg);
-      font-family:"Minion Pro", serif; 
+      font-family:"Minion Pro", "Times New Roman", Georgia, serif;
       letter-spacing:.01em;
       user-select: none;       /* ✅ empêche la sélection du texte */
       -webkit-user-select: none; /* pour Safari */
@@ -39,7 +31,7 @@
     }
 
     /* === BACKGROUND PLASMA (derrière, fixe) === */
-    #plasma-bg, .wrap, .footer { opacity: 0; }
+    #plasma-bg { opacity: 0; }
 
     #plasma-bg { 
       position: fixed; inset: 0; z-index: 0; pointer-events: none;
@@ -48,13 +40,9 @@
 
     .wrap, .footer {
       position: relative; z-index: 1;
-      transition: opacity .5s ease, transform .5s ease;
-      transform: translateY(6px);               /* léger slide-up */
     }
 
     html.plasma-ready #plasma-bg { opacity: 1; }
-    html.plasma-ready .wrap,
-    html.plasma-ready .footer { opacity: 1; transform: none; }
 
     /* === CONTENU === */
     :root {
@@ -237,7 +225,7 @@
     <div class="kicker">seoul & paris</div>
     <div class="desc">botanical set design studio</div>
     <div class="soon">more coming soon</div>
-    <button class="pdf-btn" type="button" id="openPdf" data-pdf="./maison-joo-portfolio.pdf">
+    <button class="pdf-btn" type="button" id="openPdf" data-pdf="./maison-joo-portfolio-web.pdf">
       view file
     </button>
   </main>
@@ -264,7 +252,7 @@
           allow="fullscreen"
         ></iframe>
         <p class="pdf-modal__hint">
-          The PDF loads above. If nothing appears, <a href="./maison-joo-portfolio.pdf" target="_blank" rel="noopener">open it in a new tab</a>.
+          The PDF loads above. If nothing appears, <a href="./maison-joo-portfolio-web.pdf" target="_blank" rel="noopener">open it in a new tab</a>.
         </p>
       </div>
     </div>
@@ -272,7 +260,8 @@
 
   <!-- Plasma vanilla avec OGL (ESM CDN) -->
   <script type="module">
-    import { Renderer, Program, Mesh, Triangle } from "https://esm.sh/ogl@0.0.104";
+    const loadPlasma = async () => {
+    const { Renderer, Program, Mesh, Triangle } = await import("https://esm.sh/ogl@0.0.104");
 
     // Réglages ambiance
     const isMobile = window.innerWidth < 768;
@@ -415,6 +404,11 @@
     } else {
       requestAnimationFrame(loop);
     }
+    };
+
+    loadPlasma().catch(() => {
+      document.documentElement.classList.add('plasma-ready');
+    });
 
     // ==== PDF MODAL ====
     const pdfBtn = document.getElementById('openPdf');
