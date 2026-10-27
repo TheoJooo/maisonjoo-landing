@@ -259,7 +259,7 @@ const bendPath = (path, f, bend) => path.map(([x, y]) => {
 });
 
 // ---- couleurs ----
-let mode = 'vivid';
+let mode = 'mono';   // noir et blanc par défaut
 try {
   const saved = localStorage.getItem('mj-flora');
   if (TONE[saved]) mode = saved;
@@ -609,7 +609,8 @@ const setMode = (next) => {
 modeButtons.forEach((b) => b.addEventListener('click', () => setMode(b.dataset.floraMode)));
 setMode(mode);
 
-// le choix des couleurs reste caché : la touche F l'ouvre ou le referme, Échap le referme
+// le choix des couleurs reste caché : la touche F l'ouvre ou le referme, Échap le referme ;
+// au doigt, un appui long sur « maison joo » (nav.js) l'ouvre, toucher ailleurs le referme
 const tint = document.querySelector('.tint');
 const showTint = (open) => {
   if (!tint) return;
@@ -624,6 +625,10 @@ document.addEventListener('keydown', (e) => {
   if (document.documentElement.classList.contains('modal-open')) return;
   if (e.key === 'f' || e.key === 'F') showTint(!tint?.classList.contains('is-open'));
   else if (e.key === 'Escape') showTint(false);
+});
+document.addEventListener('flora:toggle', () => showTint(!tint?.classList.contains('is-open')));
+document.addEventListener('pointerdown', (e) => {
+  if (tint?.classList.contains('is-open') && !e.target.closest?.('.tint, [data-flora-toggle]')) showTint(false);
 });
 
 // sans ça, glisser depuis une photo lance le glisser-déposer natif et coupe la traînée de fleurs

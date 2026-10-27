@@ -270,7 +270,8 @@
       transition: opacity .35s ease, filter .5s var(--ease-soft), transform .7s var(--spring);
     }
     .dock.is-shown, .dock:has(:focus-visible) { opacity: 1; filter: none; pointer-events: auto; transform: translate3d(-50%, 0, 0); }
-    .dock__home { display: inline-flex; align-items: center; height: 36px; margin-right: 6px; font-size: 17px; line-height: 1; font-weight: 700; text-decoration: none; }
+    .dock__home { display: inline-flex; align-items: center; height: 36px; margin-right: 6px; font-size: 17px; line-height: 1; font-weight: 700; text-decoration: none;
+      -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
     /* « view file » et « contact » : du texte, séparé par un filet */
     .dock__btn {
       -webkit-appearance: none; appearance: none; position: relative;
@@ -732,16 +733,16 @@
   </nav>
 
   <nav class="dock glass" aria-label="Site" data-no-flower>
-    <a class="dock__home" href="#top">maison joo</a>
+    <a class="dock__home" href="#top" data-flora-toggle>maison joo</a>
     <button class="dock__btn" type="button" data-open-pdf aria-haspopup="dialog">view file</button>
     <a class="dock__btn" href="mailto:contact@maisonjoo.com" data-open-contact aria-haspopup="dialog">contact</a>
   </nav>
 
   <div class="tint glass" role="group" aria-label="Flower colours" data-no-flower>
     <span class="tint__label" aria-hidden="true">flowers</span>
-    <button class="tint__dot tint__dot--vivid" type="button" data-flora-mode="vivid" aria-pressed="true" title="vivid"><span class="sr">vivid</span></button>
+    <button class="tint__dot tint__dot--vivid" type="button" data-flora-mode="vivid" aria-pressed="false" title="vivid"><span class="sr">vivid</span></button>
     <button class="tint__dot tint__dot--soft" type="button" data-flora-mode="soft" aria-pressed="false" title="soft"><span class="sr">soft</span></button>
-    <button class="tint__dot tint__dot--mono" type="button" data-flora-mode="mono" aria-pressed="false" title="black &amp; white"><span class="sr">black and white</span></button>
+    <button class="tint__dot tint__dot--mono" type="button" data-flora-mode="mono" aria-pressed="true" title="black &amp; white"><span class="sr">black and white</span></button>
   </div>
 
   <div class="pdf-modal" id="pdfModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="pdfModalTitle">

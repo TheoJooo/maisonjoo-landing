@@ -112,8 +112,23 @@ island.addEventListener('focusin', (e) => { if (e.target.matches(':focus-visible
 island.addEventListener('focusout', () => point(-1));
 
 // ---- barre du bas ----
-dock.querySelector('.dock__home').addEventListener('click', (e) => {
+// un clic remonte en haut ; un appui long ouvre le choix des couleurs des fleurs
+const home = dock.querySelector('.dock__home');
+let press = 0, pressed = false;
+home.addEventListener('pointerdown', () => {
+  pressed = false;
+  clearTimeout(press);
+  press = setTimeout(() => {
+    pressed = true;
+    navigator.vibrate?.(8);
+    document.dispatchEvent(new CustomEvent('flora:toggle'));
+  }, 550);
+});
+['pointerup', 'pointerleave', 'pointercancel'].forEach((type) => home.addEventListener(type, () => clearTimeout(press)));
+home.addEventListener('contextmenu', (e) => e.preventDefault());   // pas de menu « ouvrir le lien » à l'appui long
+home.addEventListener('click', (e) => {
   e.preventDefault();
+  if (pressed) { pressed = false; return; }
   scrollToY(0);
   hero.focus({ preventScroll: true });   // le clavier repart du haut de la page
 });
