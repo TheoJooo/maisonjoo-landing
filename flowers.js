@@ -12,8 +12,9 @@ const DPR = Math.min(window.devicePixelRatio || 1, isMobile ? 2 : 1.5);
 const SPRITE_DPR = Math.min(DPR, 1.5);   // têtes un peu plus douces, et moins de mémoire
 const MAX_FLOWERS = isMobile ? 36 : 64;  // au-delà, les plus anciennes s'effacent
 const FADE_MS = 900;
+const SWAP_MS = 700;                     // fondu d'une couleur à l'autre quand on change de mode
 const SWAY_FPS = 30;                     // le vent est lent : 30 fps suffisent
-const IGNORE = 'a, button, input, textarea, select, label, iframe, .pdf-modal';
+const IGNORE = 'a, button, input, textarea, select, label, iframe, .pdf-modal, .blot, [data-no-flower]';
 
 // palette relevée sur la vidéo de référence
 const PALETTE = {
@@ -28,16 +29,37 @@ const SIZES = { pompom: [.055, .09], spiky: [.042, .066], tulip: [.03, .046], sm
 const STEM = [63, 125, 58];
 const STEM_LIGHT = [150, 196, 128];
 const LEAF = [146, 196, 124];
+const PAPER = [253, 250, 250];
+
+// modes de couleur : vif (la palette d'origine), poudré, ou encre noire
+const luma = ([r, g, b]) => .299 * r + .587 * g + .114 * b;
+const TONE = {
+  vivid: (c) => c,
+  // à moitié désaturé, puis dilué dans le papier
+  soft: (c) => { const l = luma(c); return c.map((v, i) => Math.round((v + (l - v) * .55) * .7 + PAPER[i] * .3)); },
+  // la clarté de la couleur d'origine devient un gris d'encre
+  mono: (c) => { const g = Math.round(34 + luma(c) * .5); return [g, g, g]; },
+};
 
 const TAU = Math.PI * 2;
-const rand = (a, b) => a + Math.random() * (b - a);
-const pick = (list) => list[Math.random() * list.length | 0];
-const gauss = () => Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(TAU * Math.random());
+// hasard déterministe pendant la peinture d'une tête : repeinte avec la même graine,
+// elle garde exactement sa forme et ne change que de couleur
+const seeded = (seed) => () => {
+  seed = seed + 0x6D2B79F5 | 0;
+  let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+  t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+  return ((t ^ t >>> 14) >>> 0) / 4294967296;
+};
+let random = Math.random;
+const rand = (a, b) => a + random() * (b - a);
+const pick = (list) => list[random() * list.length | 0];
+const gauss = () => Math.sqrt(-2 * Math.log(1 - random())) * Math.cos(TAU * random());
 const clamp01 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
 const easeOut = (p) => 1 - (1 - p) ** 3;
+const easeInOut = (p) => p < .5 ? 4 * p * p * p : 1 - (-2 * p + 2) ** 3 / 2;
 const easeOutBack = (p, s = 1.3) => 1 + (s + 1) * (p - 1) ** 3 + s * (p - 1) ** 2;
 const pickWeighted = (list) => {
-  let r = Math.random();
+  let r = random();
   for (const [k, w] of list) if ((r -= w) <= 0) return k;
   return list[0][0];
 };
@@ -97,7 +119,7 @@ const PAINT = {
     // petits pétales en couronne : la texture du dahlia
     for (let i = 0, n = Math.round(R * .9); i < n; i++) {
       const a = rand(0, TAU), r = R * rand(.35, .85);
-      g.fillStyle = rgba(Math.random() < .5 ? deep : rgb, rand(.08, .18));
+      g.fillStyle = rgba(random() < .5 ? deep : rgb, rand(.08, .18));
       g.beginPath();
       g.ellipse(Math.cos(a) * r, Math.sin(a) * r, R * rand(.12, .2), R * rand(.05, .08), a, 0, TAU);
       g.fill();
@@ -107,7 +129,7 @@ const PAINT = {
     for (let i = 0, n = Math.round(R * 4); i < n; i++) {
       const a = rand(0, TAU), b = gauss() * .1;
       const r0 = R * rand(.1, .55), r1 = R * rand(.7, 1), rm = (r0 + r1) / 2;
-      g.strokeStyle = rgba(Math.random() < .35 ? deep : rgb, rand(.08, .2));
+      g.strokeStyle = rgba(random() < .35 ? deep : rgb, rand(.08, .2));
       g.lineWidth = rand(.4, 1.3) * Math.max(1, R / 36);
       g.beginPath();
       g.moveTo(Math.cos(a) * r0, Math.sin(a) * r0);
@@ -118,7 +140,7 @@ const PAINT = {
   },
   // étoile à pétales pointus, deux rangs
   spiky(g, R, rgb) {
-    const n = 9 + (Math.random() * 5 | 0), a0 = rand(0, TAU);
+    const n = 9 + (random() * 5 | 0), a0 = rand(0, TAU);
     const star = (r, off) => {
       const pts = [];
       for (let i = 0; i < n; i++) {
@@ -140,7 +162,7 @@ const PAINT = {
   },
   // petite fleur ronde à 5 ou 6 pétales
   small(g, R, rgb) {
-    const k = 5 + (Math.random() * 2 | 0), pts = [];
+    const k = 5 + (random() * 2 | 0), pts = [];
     for (let i = 0; i < 40; i++) {
       const a = i / 40 * TAU, r = R * (.6 + .4 * Math.abs(Math.cos(k * a / 2)));
       pts.push([Math.cos(a) * r, Math.sin(a) * r, 1]);
@@ -174,14 +196,19 @@ const soften = (src, radius) => {
   return c;
 };
 
-const paintHead = (type, rgb, R) => {
+const paintHead = (type, rgb, R, seed) => {
   const half = R * 1.3;
   const px = Math.ceil(half * 2 * SPRITE_DPR);
   const img = canvasOf(px, px);
   const g = img.getContext('2d');
   g.setTransform(SPRITE_DPR, 0, 0, SPRITE_DPR, px / 2, px / 2);
-  PAINT[type](g, R, rgb);
-  grain(g, R);
+  random = seeded(seed);
+  try {
+    PAINT[type](g, R, rgb);
+    grain(g, R);
+  } finally {
+    random = Math.random;
+  }
   return { img, halo: soften(img, R * .35 * SPRITE_DPR), half };
 };
 
@@ -231,6 +258,25 @@ const bendPath = (path, f, bend) => path.map(([x, y]) => {
   return [x + bend * f.h * u * u, y];
 });
 
+// ---- couleurs ----
+let mode = 'vivid';
+try {
+  const saved = localStorage.getItem('mj-flora');
+  if (TONE[saved]) mode = saved;
+} catch {}
+
+// couleurs d'une fleur dans le mode courant (la tête, elle, est repeinte)
+const colorsFor = (f) => {
+  const tone = TONE[mode];
+  return { stem: tone(f.base.stem), light: tone(STEM_LIGHT), deep: shade(tone(f.base.head), .72), leaves: f.base.leaves.map(tone) };
+};
+const mix = (a, b, k) => a.map((v, i) => Math.round(v + (b[i] - v) * k));
+const mixColors = (a, b, k) => ({
+  stem: mix(a.stem, b.stem, k), light: mix(a.light, b.light, k), deep: mix(a.deep, b.deep, k),
+  leaves: a.leaves.map((l, i) => mix(l, b.leaves[i], k)),
+});
+const swapProgress = (f, now) => f.prev ? easeInOut(clamp01((now - f.swapAt) / SWAP_MS)) : 1;
+
 // ---- dessin ----
 const layer = document.createElement('div');
 layer.className = 'flora';
@@ -247,27 +293,27 @@ const strokePath = (path) => {
   ctx.stroke();
 };
 
-const drawStem = (f, path) => {
+const drawStem = (f, path, c) => {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.strokeStyle = rgba(f.stemRgb, .9);
+  ctx.strokeStyle = rgba(c.stem, .9);
   ctx.lineWidth = f.stemW;
   strokePath(path);
   // reflets clairs en pointillés : le grain du pinceau sur la tige
-  ctx.strokeStyle = rgba(STEM_LIGHT, .55);
+  ctx.strokeStyle = rgba(c.light, .55);
   ctx.lineWidth = f.stemW * .4;
   ctx.setLineDash(f.dash);
   strokePath(path);
   ctx.setLineDash([]);
 };
 
-const drawLeaf = (f, l, bend, t, s) => {
+const drawLeaf = (f, l, rgb, bend, t, s) => {
   const u = (f.y - l.y) / f.h;
   ctx.save();
   ctx.translate(l.x + bend * f.h * u * u, l.y);
   ctx.rotate(l.angle + 2 * bend * u + .08 * Math.sin(t * 2.3 + l.phase));
   ctx.scale(s, s);
-  ctx.fillStyle = rgba(l.rgb, l.alpha);
+  ctx.fillStyle = rgba(rgb, l.alpha);
   // deux voiles décalés : plus foncé là où ils se chevauchent
   for (const [w, k] of [[1, 1], [.7, .9]]) {
     ctx.beginPath();
@@ -279,21 +325,39 @@ const drawLeaf = (f, l, bend, t, s) => {
   ctx.restore();
 };
 
-const drawBud = (f, tip, sway, grow, a) => {
+const drawBud = (f, tip, sway, grow, a, deep) => {
   const r = f.R * (.05 + .1 * grow);
   ctx.save();
   ctx.globalAlpha *= a;
   ctx.translate(tip[0], tip[1]);
   ctx.rotate(f.tilt + sway);
-  ctx.fillStyle = rgba(f.deep, .9);
+  ctx.fillStyle = rgba(deep, .9);
   ctx.beginPath();
   ctx.ellipse(0, -r * .6, r * .75, r * 1.1, 0, 0, TAU);
   ctx.fill();
   ctx.restore();
 };
 
-const drawHead = (f, tip, sway, bp, age) => {
-  const { img, halo, half } = f.head;
+// fondu exact entre deux têtes peintes avec la même graine : même couverture, seule la
+// couleur change. Dessinées l'une sur l'autre, elles pâliraient à mi-chemin.
+const scratch = [canvasOf(1, 1), canvasOf(1, 1)];
+const crossfade = (slot, a, b, k) => {
+  const c = scratch[slot];
+  if (c.width < a.width || c.height < a.height) {
+    c.width = Math.max(c.width, a.width);
+    c.height = Math.max(c.height, a.height);
+  }
+  const g = c.getContext('2d');
+  g.globalCompositeOperation = 'copy';
+  g.globalAlpha = 1 - k;
+  g.drawImage(a, 0, 0);
+  g.globalCompositeOperation = 'lighter';
+  g.globalAlpha = k;
+  g.drawImage(b, 0, 0);
+  return c;
+};
+
+const drawHead = (f, tip, sway, bp, age, swap) => {
   const s = .1 + .9 * easeOutBack(bp);
   // auréole : le pigment qui continue de diffuser dans le papier mouillé
   const hp = easeOut(clamp01((age - f.bloomAt - 150) / (f.bloomDur + 300)));
@@ -305,10 +369,14 @@ const drawHead = (f, tip, sway, bp, age) => {
   ctx.translate(0, -f.lift * s);
   ctx.rotate(f.rot - (1 - easeOut(bp)) * f.spin);
   ctx.globalCompositeOperation = 'source-over';   // la tête couvre le haut de sa tige
+  // changement de mode : l'ancienne peinture se fond dans la nouvelle
+  const { img, halo, half } = f.head;
+  const im = swap < 1 ? crossfade(0, f.prev.img, img, swap) : img;
+  const ha = swap < 1 ? crossfade(1, f.prev.halo, halo, swap) : halo;
   ctx.globalAlpha = base * .35 * hp;
-  ctx.drawImage(halo, -half * hs, -half * hs, half * 2 * hs, half * 2 * hs);
+  ctx.drawImage(ha, 0, 0, halo.width, halo.height, -half * hs, -half * hs, half * 2 * hs, half * 2 * hs);
   ctx.globalAlpha = base * Math.min(1, .35 + bp * 2);
-  ctx.drawImage(img, -half * s, -half * s, half * 2 * s, half * 2 * s);
+  ctx.drawImage(im, 0, 0, img.width, img.height, -half * s, -half * s, half * 2 * s, half * 2 * s);
   ctx.restore();
 };
 
@@ -320,16 +388,18 @@ const drawFlower = (f, now, t) => {
   const bend = grow * f.flex * (wind(f.x, t) + .3 * Math.sin(t * f.freq + f.phase));
   const path = bendPath(stemTo(f.stem, f.len * grow), f, bend);
   const tip = path[path.length - 1];
+  const swap = swapProgress(f, now);
+  const c = swap < 1 ? mixColors(f.colPrev, f.col, swap) : f.col;
   ctx.save();
   ctx.globalCompositeOperation = 'multiply';   // tiges et feuilles se mélangent comme des pigments
   if (f.dying) ctx.globalAlpha = 1 - clamp01((now - f.dying) / FADE_MS);
-  drawStem(f, path);
-  for (const l of f.leaves) {
+  drawStem(f, path, c);
+  f.leaves.forEach((l, i) => {
     const lp = clamp01((grow - l.t) / .2);
-    if (lp > 0) drawLeaf(f, l, bend, t, easeOutBack(lp));
-  }
-  if (bp < .3) drawBud(f, tip, 2 * bend, grow, 1 - bp / .3);
-  if (bp > 0) drawHead(f, tip, 2 * bend, bp, age);
+    if (lp > 0) drawLeaf(f, l, c.leaves[i], bend, t, easeOutBack(lp));
+  });
+  if (bp < .3) drawBud(f, tip, 2 * bend, grow, 1 - bp / .3, c.deep);
+  if (bp > 0) drawHead(f, tip, 2 * bend, bp, age, swap);
   ctx.restore();
 };
 
@@ -366,15 +436,36 @@ const inBand = (f) => f.y + 4 > top && f.y - f.h - f.R * 2 < top + CH;
 const draw = (now) => {
   const t = reduceMotion ? 0 : now / 1000;
   flowers = flowers.filter((f) => !f.dying || now - f.dying < FADE_MS);
+  for (const f of flowers) if (f.prev && now - f.swapAt >= SWAP_MS) f.prev = f.colPrev = null;
   ctx.setTransform(DPR, 0, 0, DPR, 0, -top * DPR);
   ctx.clearRect(0, top, W, CH);
   for (const f of flowers) if (inBand(f)) drawFlower(f, now, t);
 };
 
+// après un changement de mode : quelques têtes repeintes par image, celles à l'écran d'abord
+const repaint = (now) => {
+  const t0 = performance.now();
+  const stale = flowers.filter((f) => f.stale && !f.dying).sort((a, b) => inBand(b) - inBand(a));
+  for (const f of stale) {
+    const p = swapProgress(f, now);
+    f.colPrev = f.prev ? mixColors(f.colPrev, f.col, p) : f.col;
+    // second changement en plein fondu : on part de la peinture qui domine encore
+    if (!f.prev || p >= .5) f.prev = f.head;
+    f.head = paintHead(f.type, TONE[mode](f.base.head), f.R, f.seed);
+    f.col = colorsFor(f);
+    f.swapAt = reduceMotion ? -Infinity : now;
+    f.stale = false;
+    if (performance.now() - t0 > 8) break;
+  }
+  return stale.length > 0;
+};
+
 const tick = (now) => {
   raf = 0;
   const moved = place();
-  const busy = flowers.some((f) => f.dying || now - f.born < f.end);   // pousse ou s'efface
+  if (repaint(now)) dirty = true;
+  // pousse, s'efface, ou change de couleur
+  const busy = flowers.some((f) => f.dying || f.stale || now - f.born < f.end || (f.prev && now - f.swapAt < SWAP_MS));
   const swaying = !reduceMotion && flowers.some(inBand);
   if (moved || busy || dirty || (swaying && now - lastDraw >= 1000 / SWAY_FPS - 4)) {
     draw(now);
@@ -395,7 +486,7 @@ const trim = (now) => {
 const plant = (x, y) => {
   const now = performance.now();
   const type = pickWeighted(TYPES);
-  const rgb = jitter(hexToRgb(pick(PALETTE[type])), 9);
+  const rgb = jitter(hexToRgb(pick(PALETTE[type])), 9);   // couleur d'origine, avant le mode
   const R = U * rand(...SIZES[type]);
   const stem = stemPath(x, y, Math.max(16, Math.min(H * rand(.24, .52), y - R - 12)));
   const len = stem[stem.length - 1][2];
@@ -412,7 +503,6 @@ const plant = (x, y) => {
       phase: rand(0, TAU),
       len: U * rand(.022, .042),
       w: U * rand(.008, .013),
-      rgb: jitter(LEAF, 12),
       alpha: rand(.3, .48),
     });
   }
@@ -420,22 +510,25 @@ const plant = (x, y) => {
   const radial = type !== 'tulip';
   const stemDur = 380 + len * .9;
   const bloomDur = rand(1000, 1400);
-  flowers.push({
+  const f = {
     born: reduceMotion ? -Infinity : now,
-    x, y, h: Math.max(1, y - by), R, deep: shade(rgb, .72), stem, len, leaves,
+    x, y, h: Math.max(1, y - by), R, type, stem, len, leaves,
+    seed: Math.random() * 4294967296 | 0,
+    base: { head: rgb, stem: jitter(STEM, 10), leaves: leaves.map(() => jitter(LEAF, 12)) },
     tilt: Math.atan2(bx - ax, ay - by),
-    head: paintHead(type, rgb, R),
     rot: radial ? rand(0, TAU) : gauss() * .1,
     spin: radial ? rand(.4, .9) : .12,
     lift: radial ? 0 : R * .5,           // la tulipe repose sur la tige
     flex: rand(.03, .055),               // souplesse de la tige au vent
     freq: rand(.9, 1.6), phase: rand(0, TAU),
-    stemRgb: jitter(STEM, 10),
     stemW: rand(1.1, 1.7) * Math.max(1, U / 700),
     dash: [rand(2, 5), rand(3, 8)],
     stemDur, bloomAt: stemDur * .8, bloomDur,
     end: stemDur * .8 + bloomDur + 500,
-  });
+  };
+  f.head = paintHead(type, TONE[mode](rgb), R, f.seed);
+  f.col = colorsFor(f);
+  flowers.push(f);
   trim(now);
   dirty = true;
   wake();
@@ -501,5 +594,37 @@ document.addEventListener('pointerup', (e) => {
   endDrag(e);
 });
 document.addEventListener('pointercancel', (e) => { tap = null; endDrag(e); });
+// ---- modes de couleur ----
+const modeButtons = [...document.querySelectorAll('[data-flora-mode]')];
+const setMode = (next) => {
+  if (!TONE[next]) return;
+  document.documentElement.dataset.flora = next;
+  for (const b of modeButtons) b.setAttribute('aria-pressed', String(b.dataset.floraMode === next));
+  if (next === mode) return;
+  mode = next;
+  try { localStorage.setItem('mj-flora', next); } catch {}
+  for (const f of flowers) f.stale = true;
+  wake();
+};
+modeButtons.forEach((b) => b.addEventListener('click', () => setMode(b.dataset.floraMode)));
+setMode(mode);
+
+// le choix des couleurs reste caché : la touche F l'ouvre ou le referme, Échap le referme
+const tint = document.querySelector('.tint');
+const showTint = (open) => {
+  if (!tint) return;
+  tint.classList.toggle('is-open', open);
+  tint.inert = !open;
+  if (!open && tint.contains(document.activeElement)) document.activeElement.blur();
+};
+showTint(false);
+document.addEventListener('keydown', (e) => {
+  if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+  if (e.target.closest?.('input, textarea, select, [contenteditable]')) return;
+  if (document.documentElement.classList.contains('modal-open')) return;
+  if (e.key === 'f' || e.key === 'F') showTint(!tint?.classList.contains('is-open'));
+  else if (e.key === 'Escape') showTint(false);
+});
+
 // sans ça, glisser depuis une photo lance le glisser-déposer natif et coupe la traînée de fleurs
 document.addEventListener('dragstart', (e) => e.preventDefault());
